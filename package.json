@@ -1,0 +1,46 @@
+{
+  "name": "gulp-retinize",
+  "version": "0.0.1",
+  "description": "Automated retina down-scaling from @2x and @4x",
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/iveson/gulp-retinize"
+  },
+  "engines": {
+    "node": ">=0.10.0"
+  },
+  "scripts": {
+    "test": "mocha"
+  },
+  "files": [
+    "index.js"
+  ],
+  "keywords": [
+    "retina",
+    "retinize",
+    "resize",
+    "scale",
+    "image",
+    "gulpplugin"
+  ],
+  "author": "Matti Dupre <matti@threebeluga.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/iveson/gulp-retinize/issues"
+  },
+  "homepage": "https://github.com/iveson/gulp-retinize",
+  "dependencies": {
+    "event-stream": "^3.1.5",
+    "gm": "~1.14.2",
+    "gulp-util": "^2.2.14",
+    "path": "^0.4.9",
+    "stream-reduce": "^1.0.3",
+    "vinyl-source-stream": "^0.1.1"
+  },
+  "devDependencies": {
+    "gulp": "^3.6.2",
+    "mocha": "*",
+    "rimraf": "^2.2.6"
+  }
+}
