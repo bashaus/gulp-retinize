@@ -1,135 +1,251 @@
 var gm      = require('gm');
-var source  = require('vinyl-source-stream');
-var es      = require('event-stream');
+var vinylSource  = require('vinyl-source-stream');
 var path    = require('path');
-var reduce  = require('stream-reduce');
-var gutil   = require('gulp-util');
+// var gutil   = require('gulp-util');
+// var Err     = gutil.PluginError;
+var sizeOf = require('image-size');
+var through = require('through2');
+var fs = require('fs');
 
 const PLUGIN_NAME = 'gulp-retinize';
 
+// TODO: Create version that does not check filesystem. (Not too much to extend, use es.map?or stream-reduce?)
+
+// Define defaults
+
 var defaults = {
-  logError: false,
-  prefixIn: false,
-  prefixOut: false,
-  flagsIn: ['@4x', '@2x', '@1x'],
-  flagsOut: ['@4x', '@2x', ''],
-}
-
-var stream = es.through();
-var internal = es.through();
-
-module.exports = function(){
-  stream = es.through(function(file){
-    this.push(file);
-    internal.push(file);
-  }, function() {
-    internal.emit('end');
-  });
-  return stream;
+  flags: {1: '@1x', 2: '@2x', 4: '@4x'},
+  flagsOut: {1: '', 2: '@2x', 4: '@4x'},
+  flagPrefix: false,
+  extensions: ['jpg', 'jpeg', 'png'],
+  roundUp: true,
+  remove: true,
+  scaleUp: false,
 };
 
-internal
-  .pipe(es.map(function(file, cb){
-    if (!file.isNull() && !file.isDirectory()){
-      gm(file.contents).size(function(err, size){
-        cb(err, {
-          file: file,
+module.exports = function(options) { 
+
+  // Extend Options
+  options = defaults;// TODO: Parse and extend options
+
+  // Instantiate Retina class w/ options
+  var retina = new RetinaClass(options);
+
+  // Return read stream to filter relevant images
+  return through.obj(
+    // Transform function filters image files
+    function(file, enc, cb) {
+      if (
+        !file.isNull() &&
+        !file.isDirectory() &&
+        options.extensions.indexOf(path.extname(file.path).substr(1)) > -1
+      ) {
+        file = retina.tapFS(file, cb);
+      } else {
+        cb();
+      }
+      // Push only if file is returned by retina (otherwise it is dropped from stream)
+      if (file) this.push(file);
+    },
+    // Flush function adds new images and ends stream
+    retina.flush
+  );
+
+};
+
+function RetinaClass(options) {
+
+  var sets = [];
+  var streams = [];
+
+  this.tapFS = function(file, cb) {
+    var img = parse(file);
+      if (img) {
+        if (sets.indexOf(img.id) === -1) {
+          sets.push(img.id);
+          var files = fromFS(img);
+          streams = streams.concat(buildStreams(files[0], files[1]));
+        }
+        if (img.newPath === false) {
+          // Omit file
+          file = undefined;
+        } else if (img.newPath) {
+          // Rename file
+          file.path = img.newPath;
+        }
+      };
+    cb();
+    return file;
+  };
+
+  this.flush = function() {
+    var mainStream = this; // Context set by caller
+    var counter = streams.length - 1;
+    streams.forEach(function(newStream) {
+      newStream.pipe(through.obj(function(file, enc, cb) {
+        mainStream.push(file);
+      }));
+    });
+  };
+
+  function fromFS(img) {
+
+    var size;
+    var sources = [];
+    var targets = [];
+    var streams = [];
+    for(var dpi in options.flags) {
+      dpi = parseInt(dpi);
+      var flag = options.flags[dpi];
+      var filename = buildFilename(img.name, flag, img.extension);
+      var filepath = img.folder + filename;
+      try {
+        var size = sizeOf(filepath);
+        sources.push({
+          path: filepath,
           size: size,
+          dpi: dpi
         });
-      });
-    } else {
-      cb();
-    }
-  }))
-  .pipe(reduce(function(acc, data){
-    var name = path.basename(data.file.path);
-    var shortPath = data.file.path.substr(data.file.base.length);
-
-    var base = data.file.path.substr(data.file.base.length).substr(1, shortPath.length - name.length - 1);
-    var fileArr = path.basename(data.file.path);
-      .match(/(.+?)(?:\@([124])x)?\.(png|jpg)/);
-    var original = fileArr[1]+'.'+fileArr[3];
-
-    acc[base] || (acc[base] = {});
-    acc[base][original] || (acc[base][original] = {});
-
-    acc[base][original]['at'+(fileArr[2] || '1')+'x'] = {
-      path: data.file.path,
-      name: fileArr[1],
-      extension: fileArr[3],
-      width: data.size.width,
-      height: data.size.height,
-      contents: data.file.contents,
-    };
-
-    return acc;
-
-  }, {}))
-  .on('data', function(data){
-    var streams = []; // Could also be done with promises.
-    for (var base in data){
-      for (var original in data[base]){
-        var set = data[base][original];
-        var resize = function(path, width, height){
-          return gm(path)
-            .resize(Math.ceil(width), Math.ceil(height))
-            .stream();
-        }
-        if (set.at4x && !set.at2x){
-          streams.push(
-            gm(set.at4x.path)
-              .resize(Math.ceil(set.at4x.width/2), Math.ceil(set.at4x.height/2))
-              .stream()
-              .pipe(source(base+set.at4x.name+'@2x.'+set.at4x.extension))
-          );
-        }
-        if (set.at4x && !set.at2x && !set.at1x){
-          streams.push(
-            gm(set.at4x.path)
-              .resize(Math.ceil(set.at4x.width/4), Math.ceil(set.at4x.height/4))
-              .stream()
-              .pipe(source(base+set.at4x.name+config.defRoot+'.'+set.at4x.extension))
-          );
-        }
-        if (set.at2x && !set.at1x){
-          streams.push(
-            gm(set.at2x.path)
-              .resize(Math.ceil(set.at2x.width/2), Math.ceil(set.at2x.height/2))
-              .stream()
-              .pipe(source(base+set.at2x.name+config.defRoot+'.'+set.at2x.extension))
-          );
+      } catch(e) {
+        if (e.code === 'ENOENT') {
+          targets.push({
+            path: img.folder + filename,
+            base: img.base,
+            dpi: dpi
+          });
+        } else {
+          throw(e); // ??
         }
       }
     }
-    es.merge.apply(es.merge, streams)
-      .pipe(es.map(function(file, cb){
-        stream.push(file);
+    return [sources, targets];
+
+  }
+
+  function fromStream() {
+
+  }
+
+  function buildStreams(sources, targets) {
+    var streams = [];
+    targets.forEach(function(target) {
+      sources.sort(function(a, b) {
+        return a.dpi - b.dpi;
+      });
+      var last;
+      sources.every(function(source) {
+        if (source.dpi > target.dpi) {
+          streams.push(resize(source, target));
+          return last = false;
+        } else {
+          return last = source;
+        }
+      });
+      if (last && options.scaleUp) streams.push(resize(source, last));
+    });
+    return streams;
+  }
+
+  function resize(source, target) {
+    
+    var scale = target.dpi / source.dpi;
+    var size;
+    if (options.roundUp) {
+      size = [Math.ceil(source.size.width * scale), Math.ceil(source.size.height * scale)];
+    } else {
+      size = [Math.floor(source.size.width * scale), Math.floor(source.size.height * scale)];
+    }
+    return gm(source.path)
+      .resize(size[0], size[1])
+      .stream()
+      .pipe(vinylSource())
+      .pipe(through.obj(function(file, enc, cb){
+        file.base = target.base;
+        file.path = target.path;
+        this.push(file);
         cb();
       }))
-      .on('end', function(){
-        stream.emit('end');
-      });
-  })
-;
+    ;
+      
+  }
 
-function checkSizes(set){
-  var pass = true;
-  if (set.at1x && set.at2x){
-    if (set.at1x.width !== set.at2x.width/2 || set.at1x.height !== set.at2x.height/2){
-      pass = false;
-      gutil.log('mismatch'); // TODO: Write better messages
+  function parse(file) {
+
+    // TODO: Clean up.
+
+    var img = {};
+    var fPath = file.path;
+    var ext = path.extname(fPath);
+    var fName = path.basename(fPath).slice(0, -ext.length);
+    var base = file.base;
+    var partialPath = fPath.slice(base.length, -fName.length - ext.length);
+    var dpi;
+
+    var extracted = extractDpi(fName);
+    if (!extracted) return false;
+    var name = extracted.name;
+    var fDpi = extracted.dpi;
+
+    var inFlag = options.flags[fDpi];
+    var outFlag = options.flagsOut[fDpi];
+    var newPath;
+    if (typeof outFlag === 'undefined' && options.remove) {
+      newPath = false
+    } else if (outFlag !== inFlag) {
+      newPath = base + partialPath+ buildFilename(name, outFlag, ext);
     }
+
+    return {
+      id: partialPath + name + ext,
+      name: name,
+      extension: ext,
+      partialPath: partialPath,
+      folder: base + partialPath,
+      base: base,
+      fDpi: fDpi,
+      newPath: newPath,
+    };
+
   }
-  if (set.at1x && set.at4x){
-    if (set.at1x.width !== set.at4x.width/4 || set.at1x.height !== set.at4x.height/4){
-      pass = false;
-      gutil.log('mismatch');
+
+  function extractDpi(fullName) {
+
+    var result = false;
+    for(var d in options.flags) {
+      var flag = options.flags[d];
+      if (flag === '') {
+        // Name defaults to fullName if no other flag is found.
+        result = {
+          dpi: '',
+          name: fullName
+        };
+      } else if (options.flagPrefix) {
+        if (fullName.slice(0, flag.length) === flag) {
+          result = {
+            dpi: d,
+            name: fullName.slice(flag.length)
+          };
+          break;
+        }
+      } else {
+        if (fullName.slice(-flag.length) === flag) {
+          result = {
+            dpi: d,
+            name: fullName.slice(0, -flag.length)
+          };
+          break;
+        }
+      }
     }
+    return result;
+
   }
-  if (set.at2x && set.at4x){
-    if (set.at2x.width !== set.at4x.width/2 || set.at2x.height !== set.at4x.height/2){
-      pass = false;
-      gutil.log('mismatch');
-    }
+
+  function buildFilename(name, dpi, ext) {
+
+    if (options.flagPrefix) return dpi + name + ext;
+    else return name + dpi + ext;
+
   }
-}
+
+};

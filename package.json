@@ -11,7 +11,7 @@
     "node": ">=0.10.0"
   },
   "scripts": {
-    "test": "mocha"
+    "test": "mocha  -R spec --harmony-generators"
   },
   "files": [
     "index.js"
@@ -39,8 +39,16 @@
     "vinyl-source-stream": "^0.1.1"
   },
   "devDependencies": {
+    "bluebird": "^1.2.4",
+    "chai": "^1.9.1",
+    "chai-as-promised": "^4.1.1",
+    "checksum": "^0.1.1",
+    "co-mocha": "0.0.4",
     "gulp": "^3.6.2",
+    "image-size": "^0.2.5",
     "mocha": "*",
-    "rimraf": "^2.2.6"
+    "rimraf": "^2.2.6",
+    "through2": "^0.4.2",
+    "thunkify": "^2.1.1"
   }
 }
