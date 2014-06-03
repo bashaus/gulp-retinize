@@ -1,32 +1,31 @@
 var gm      = require('gm');
 var vinylSource  = require('vinyl-source-stream');
 var path    = require('path');
-// var gutil   = require('gulp-util');
-// var Err     = gutil.PluginError;
 var sizeOf = require('image-size');
 var through = require('through2');
 var fs = require('fs');
+var extend = require('extend');
 
 const PLUGIN_NAME = 'gulp-retinize';
 
-// TODO: Create version that does not check filesystem. (Not too much to extend, use es.map?or stream-reduce?)
-
 // Define defaults
 
-var defaults = {
+var options = {
   flags: {1: '@1x', 2: '@2x', 4: '@4x'},
+  flagsPrefix: false, // TODO: Implement flagsOutPrefix
   flagsOut: {1: '', 2: '@2x', 4: '@4x'},
-  flagPrefix: false,
   extensions: ['jpg', 'jpeg', 'png'],
   roundUp: true,
-  remove: true,
-  scaleUp: false,
+  remove: true, // Will remove files containing flags but not containing flagsOut
+  scaleUp: true,
+  scanFolder: false,
 };
 
-module.exports = function(options) { 
+module.exports = function(config) { 
 
-  // Extend Options
-  options = defaults;// TODO: Parse and extend options
+  // Extend options
+  extend(options, config);
+  delete config;
 
   // Instantiate Retina class w/ options
   var retina = new RetinaClass(options);
@@ -38,9 +37,11 @@ module.exports = function(options) {
       if (
         !file.isNull() &&
         !file.isDirectory() &&
-        options.extensions.indexOf(path.extname(file.path).substr(1)) > -1
+        options.extensions.some(function(ext) {
+          return path.extname(file.path).substr(1).toLowerCase() === ext;
+        })
       ) {
-        file = retina.tapFS(file, cb);
+        file = retina.tapAll(file, cb);
       } else {
         cb();
       }
@@ -56,77 +57,109 @@ module.exports = function(options) {
 function RetinaClass(options) {
 
   var sets = [];
-  var streams = [];
 
-  this.tapFS = function(file, cb) {
+  this.tapAll = function(file, cb) {
     var img = parse(file);
-      if (img) {
-        if (sets.indexOf(img.id) === -1) {
-          sets.push(img.id);
-          var files = fromFS(img);
-          streams = streams.concat(buildStreams(files[0], files[1]));
-        }
-        if (img.newPath === false) {
-          // Omit file
-          file = undefined;
-        } else if (img.newPath) {
-          // Rename file
-          file.path = img.newPath;
-        }
-      };
+    if (img) {
+      sets[img.set.id] || (sets[img.set.id] = img.set);
+      sets[img.set.id]['files'][img.file.dpi] = img.file;
+      if (img.newPath === false) {
+        // Omit file
+        file = undefined;
+      } else if (img.newPath) {
+        // Rename file
+        file.path = img.newPath;
+      }
+    };
     cb();
     return file;
   };
 
   this.flush = function() {
+
     var mainStream = this; // Context set by caller
-    var counter = streams.length - 1;
-    streams.forEach(function(newStream) {
-      newStream.pipe(through.obj(function(file, enc, cb) {
-        mainStream.push(file);
-      }));
-    });
+
+    var images = buildAll(sets);
+    var streams = []
+      .concat(buildResizeStreams(images.sources, images.targets))
+      .concat(buildMissingStreams(images.missing));
+    if (!streams.length) {
+      mainStream.emit('end');
+    } else {    
+      var counter = streams.length;
+      streams.forEach(function(newStream) {
+        newStream.pipe(through.obj(function(file, enc, cb) {
+          mainStream.push(file);
+          --counter || mainStream.emit('end');
+        }));
+      });
+    }
   };
 
-  function fromFS(img) {
+  function buildAll(sets) {
 
-    var size;
-    var sources = [];
-    var targets = [];
-    var streams = [];
-    for(var dpi in options.flags) {
-      dpi = parseInt(dpi);
-      var flag = options.flags[dpi];
-      var filename = buildFilename(img.name, flag, img.extension);
-      var filepath = img.folder + filename;
-      try {
-        var size = sizeOf(filepath);
-        sources.push({
-          path: filepath,
-          size: size,
-          dpi: dpi
-        });
-      } catch(e) {
-        if (e.code === 'ENOENT') {
-          targets.push({
-            path: img.folder + filename,
-            base: img.base,
-            dpi: dpi
-          });
-        } else {
-          throw(e); // ??
+    var results = {
+      sources: [],
+      targets: [],
+      missing: [],
+    };
+
+    for (var id in sets) {
+      var set = sets[id];
+      var folder = set.folder;
+      var base = set.base;
+      for (var dpi in options.flags) {
+        dpi = parseInt(dpi);
+        var flag = options.flags[dpi];
+        var filename = buildFilename(set.name, flag, set.extension);
+        var filepath = folder + filename;
+        if ( set.files[dpi] || options.scanFolder ) {
+          try {
+            var size = sizeOf(filepath);
+            results.sources.push({
+              path: filepath,
+              base: base,
+              size: size,
+              dpi: dpi,
+            });
+            if (!set.files[dpi]) results.missing.push({
+              path: filepath,
+              base: base,
+            });
+            continue;
+          } catch(e) {
+            if (e.code !== 'ENOENT') {
+              throw(e);
+            }
+          }
         }
+        if (options.flagsOut[dpi]) results.targets.push({
+          path: set.folder + filename,
+          base: set.base,
+          dpi: dpi,
+        });
       }
     }
-    return [sources, targets];
+
+    return results;
 
   }
 
-  function fromStream() {
+  function buildMissingStreams(missing) {
+
+    var streams = [];
+    missing.forEach(function(img) {
+      var stream = fs.createReadStream(img.path)
+        .pipe(vinylSource())
+        .pipe(parseStream(img.path, img.base));
+      streams.push(stream);
+    });
+    return streams;
 
   }
 
-  function buildStreams(sources, targets) {
+  function buildResizeStreams(sources, targets) {
+
     var streams = [];
     targets.forEach(function(target) {
       sources.sort(function(a, b) {
@@ -141,9 +174,12 @@ function RetinaClass(options) {
           return last = source;
         }
       });
-      if (last && options.scaleUp) streams.push(resize(source, last));
+      if (last && options.scaleUp){
+        streams.push(resize(last, target));
+      }
     });
     return streams;
+
   }
 
   function resize(source, target) {
@@ -159,15 +195,20 @@ function RetinaClass(options) {
       .resize(size[0], size[1])
       .stream()
       .pipe(vinylSource())
-      .pipe(through.obj(function(file, enc, cb){
-        file.base = target.base;
-        file.path = target.path;
-        this.push(file);
-        cb();
-      }))
+      .pipe(parseStream(target.path, source.base));
     ;
       
   }
+
+  function parseStream(path, base) {
+
+    return through.obj(function(file, enc, cb){
+      file.base = base;
+      file.path = path;
+      cb(null, file);
+    });
+
+  };
 
   function parse(file) {
 
@@ -190,20 +231,26 @@ function RetinaClass(options) {
     var outFlag = options.flagsOut[fDpi];
     var newPath;
     if (typeof outFlag === 'undefined' && options.remove) {
-      newPath = false
+      newPath = false;
     } else if (outFlag !== inFlag) {
       newPath = base + partialPath+ buildFilename(name, outFlag, ext);
     }
 
     return {
-      id: partialPath + name + ext,
-      name: name,
-      extension: ext,
-      partialPath: partialPath,
-      folder: base + partialPath,
-      base: base,
-      fDpi: fDpi,
-      newPath: newPath,
+      set: {
+        id: partialPath + name + ext,
+        name: name,
+        extension: ext,
+        partialPath: partialPath,
+        folder: base + partialPath,
+        base: base,
+        files: {},
+      },
+      file: {
+        newPath: newPath,
+        dpi: fDpi,
+        path: fPath,
+      }
     };
 
   }
@@ -219,7 +266,7 @@ function RetinaClass(options) {
           dpi: '',
           name: fullName
         };
-      } else if (options.flagPrefix) {
+      } else if (options.flagsPrefix) {
         if (fullName.slice(0, flag.length) === flag) {
           result = {
             dpi: d,
@@ -243,7 +290,7 @@ function RetinaClass(options) {
 
   function buildFilename(name, dpi, ext) {
 
-    if (options.flagPrefix) return dpi + name + ext;
+    if (options.flagsPrefix) return dpi + name + ext;
     else return name + dpi + ext;
 
   }

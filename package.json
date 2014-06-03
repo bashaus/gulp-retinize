@@ -44,11 +44,14 @@
     "chai-as-promised": "^4.1.1",
     "checksum": "^0.1.1",
     "co-mocha": "0.0.4",
+    "extend": "^1.2.1",
     "gulp": "^3.6.2",
     "image-size": "^0.2.5",
     "mocha": "*",
     "rimraf": "^2.2.6",
     "through2": "^0.4.2",
-    "thunkify": "^2.1.1"
+    "thunkify": "^2.1.1",
+    "vinyl": "^0.2.3",
+    "vinyl-fs": "^0.2.1"
   }
 }
