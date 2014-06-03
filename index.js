@@ -12,19 +12,20 @@ const PLUGIN_NAME = 'gulp-retinize';
 
 var options = {
   flags: {1: '@1x', 2: '@2x', 4: '@4x'},
-  flagsPrefix: false, // TODO: Implement flagsOutPrefix
+  flagsPrefix: false,
   flagsOut: {1: '', 2: '@2x', 4: '@4x'},
+  flagsOutPrefix: false,
   extensions: ['jpg', 'jpeg', 'png'],
   roundUp: true,
   remove: true, // Will remove files containing flags but not containing flagsOut
-  scaleUp: true,
-  scanFolder: false,
+  scaleUp: false,
+  scanFolder: true,
 };
 
 module.exports = function(config) { 
 
   // Extend options
-  extend(options, config);
+  extend(options, config);  // TODO: Some options are based on others.
   delete config;
 
   // Instantiate Retina class w/ options
@@ -41,7 +42,7 @@ module.exports = function(config) {
           return path.extname(file.path).substr(1).toLowerCase() === ext;
         })
       ) {
-        file = retina.tapAll(file, cb);
+        file = retina.tapFile(file, cb);
       } else {
         cb();
       }
@@ -58,31 +59,56 @@ function RetinaClass(options) {
 
   var sets = [];
 
-  this.tapAll = function(file, cb) {
-    var img = parse(file);
+  this.tapFile = function(file, cb) {
+
+    // Extract information from file to build new streams from,
+    // if outgoing flags are different rename or delete,
+    // then return file to be pushed downstream
+
+    // Get image information (except filesize)
+
+    var img = parseFile(file);
+
+    // Append to new or existing set
+
     if (img) {
       sets[img.set.id] || (sets[img.set.id] = img.set);
       sets[img.set.id]['files'][img.file.dpi] = img.file;
-      if (img.newPath === false) {
-        // Omit file
+
+      // Delete or rename file if required
+
+      if (typeof options.flagsOut[img.file.dpi] === 'undefined' && options.remove) {
         file = undefined;
-      } else if (img.newPath) {
-        // Rename file
-        file.path = img.newPath;
+      } else if (img.file.newPath) {
+        file.path = img.file.newPath;
       }
     };
+
+    // Continue
+
     cb();
     return file;
+
   };
 
   this.flush = function() {
 
+    // Executed after 'end' event, build new streams and push them into main stream
+
     var mainStream = this; // Context set by caller
 
+    // Build arrays
+
     var images = buildAll(sets);
+
+    // Build streams
+
     var streams = []
       .concat(buildResizeStreams(images.sources, images.targets))
       .concat(buildMissingStreams(images.missing));
+
+    // Push streams into main stream
+
     if (!streams.length) {
       mainStream.emit('end');
     } else {    
@@ -98,6 +124,8 @@ function RetinaClass(options) {
 
   function buildAll(sets) {
 
+    // Build source, target and missing arrays from file set data
+
     var results = {
       sources: [],
       targets: [],
@@ -110,20 +138,39 @@ function RetinaClass(options) {
       var base = set.base;
       for (var dpi in options.flags) {
         dpi = parseInt(dpi);
-        var flag = options.flags[dpi];
-        var filename = buildFilename(set.name, flag, set.extension);
-        var filepath = folder + filename;
+
+
+        // Build file paths in and out based on flags
+
+        var filepathIn = folder + buildFilename(
+          set.name,
+          set.extension,
+          options.flags[dpi],
+          options.flagPrefix
+        );
+        var filepathOut = folder + buildFilename(
+          set.name,
+          set.extension,
+          options.flagsOut[dpi],
+          options.flagOutPrefix
+        );
+
+
+        // Build source, target, and missing (not yet streamed) files
+
         if ( set.files[dpi] || options.scanFolder ) {
           try {
-            var size = sizeOf(filepath);
+            // console.log(filepathIn);
+            var size = sizeOf(filepathIn);
             results.sources.push({
-              path: filepath,
-              base: base,
+              pathIn: filepathIn,
+              // base: base,
               size: size,
               dpi: dpi,
             });
             if (!set.files[dpi]) results.missing.push({
-              path: filepath,
+              pathIn: filepathIn,
+              pathOut: filepathOut,
               base: base,
             });
             continue;
@@ -134,7 +181,7 @@ function RetinaClass(options) {
           }
         }
         if (options.flagsOut[dpi]) results.targets.push({
-          path: set.folder + filename,
+          pathOut: filepathOut,
           base: set.base,
           dpi: dpi,
         });
@@ -147,11 +194,13 @@ function RetinaClass(options) {
 
   function buildMissingStreams(missing) {
 
+    // Return read streams from files not included in Retinize's parent stream
+
     var streams = [];
     missing.forEach(function(img) {
-      var stream = fs.createReadStream(img.path)
+      var stream = fs.createReadStream(img.pathIn)
         .pipe(vinylSource())
-        .pipe(parseStream(img.path, img.base));
+        .pipe(parseStream(img.pathOut, img.base));
       streams.push(stream);
     });
     return streams;
@@ -159,6 +208,8 @@ function RetinaClass(options) {
   }
 
   function buildResizeStreams(sources, targets) {
+
+    // Determine which files to resize from and return resized streams
 
     var streams = [];
     targets.forEach(function(target) {
@@ -183,6 +234,8 @@ function RetinaClass(options) {
   }
 
   function resize(source, target) {
+
+    // Generate resized stream from source file
     
     var scale = target.dpi / source.dpi;
     var size;
@@ -191,16 +244,18 @@ function RetinaClass(options) {
     } else {
       size = [Math.floor(source.size.width * scale), Math.floor(source.size.height * scale)];
     }
-    return gm(source.path)
+    return gm(source.pathIn)
       .resize(size[0], size[1])
       .stream()
       .pipe(vinylSource())
-      .pipe(parseStream(target.path, source.base));
+      .pipe(parseStream(target.pathOut, target.base)); // Add path and base
     ;
       
   }
 
   function parseStream(path, base) {
+
+    // Add base and path to vinyl stream
 
     return through.obj(function(file, enc, cb){
       file.base = base;
@@ -210,9 +265,9 @@ function RetinaClass(options) {
 
   };
 
-  function parse(file) {
+  function parseFile(file) {
 
-    // TODO: Clean up.
+    // Extract and build file information
 
     var img = {};
     var fPath = file.path;
@@ -220,21 +275,13 @@ function RetinaClass(options) {
     var fName = path.basename(fPath).slice(0, -ext.length);
     var base = file.base;
     var partialPath = fPath.slice(base.length, -fName.length - ext.length);
-    var dpi;
 
-    var extracted = extractDpi(fName);
+    var extracted = parseName(fName, options.flagsPrefix);
+    console.log(extracted);
     if (!extracted) return false;
     var name = extracted.name;
     var fDpi = extracted.dpi;
-
-    var inFlag = options.flags[fDpi];
-    var outFlag = options.flagsOut[fDpi];
-    var newPath;
-    if (typeof outFlag === 'undefined' && options.remove) {
-      newPath = false;
-    } else if (outFlag !== inFlag) {
-      newPath = base + partialPath+ buildFilename(name, outFlag, ext);
-    }
+    var fNameOut = buildFilename(name, ext, options.flagsOut[fDpi], options.flagsOutPrefix);
 
     return {
       set: {
@@ -247,15 +294,16 @@ function RetinaClass(options) {
         files: {},
       },
       file: {
-        newPath: newPath,
         dpi: fDpi,
-        path: fPath,
+        newPath: base + partialPath + fNameOut,
       }
     };
 
   }
 
-  function extractDpi(fullName) {
+  function parseName(fullName, prefix) {
+
+    // Extract name and dpi from file (assumes extension is excluded)
 
     var result = false;
     for(var d in options.flags) {
@@ -266,7 +314,7 @@ function RetinaClass(options) {
           dpi: '',
           name: fullName
         };
-      } else if (options.flagsPrefix) {
+      } else if (prefix) {
         if (fullName.slice(0, flag.length) === flag) {
           result = {
             dpi: d,
@@ -288,10 +336,12 @@ function RetinaClass(options) {
 
   }
 
-  function buildFilename(name, dpi, ext) {
+  function buildFilename(name, ext, flag, prefix) {
 
-    if (options.flagsPrefix) return dpi + name + ext;
-    else return name + dpi + ext;
+    // Generate filename from stem, dpi, and exetension
+
+    if (prefix) return flag + name + ext;
+    else return name + flag + ext;
 
   }
 
