@@ -180,7 +180,7 @@ function RetinaClass(options) {
             }
           }
         }
-        if (options.flagsOut[dpi]) results.targets.push({
+        if (typeof options.flagsOut[dpi] !== 'undefined') results.targets.push({
           pathOut: filepathOut,
           base: set.base,
           dpi: dpi,
