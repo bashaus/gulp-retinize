@@ -2,7 +2,7 @@
   "name": "gulp-retinize",
   "version": "0.1.0",
   "description": "Automated retina down-scaling from @2x and @4x",
-  "main": "index.js",
+  "main": "retinize.js",
   "repository": {
     "type": "git",
     "url": "https://github.com/iveson/gulp-retinize"

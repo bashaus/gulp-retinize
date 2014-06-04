@@ -25,7 +25,7 @@ var options = {
 module.exports = function(config) { 
 
   // Extend options
-  extend(options, config);  // TODO: Some options are based on others.
+  extend(options, config);
   delete config;
 
   // Instantiate Retina class w/ options
