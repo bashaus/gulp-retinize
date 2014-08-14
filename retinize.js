@@ -155,6 +155,10 @@ function RetinaClass(options) {
           options.flagOutPrefix
         );
 
+        // console.log(filepathIn);
+        // console.log(filepathOut);
+        // console.log('========');
+
 
         // Build source, target, and missing (not yet streamed) files
 
@@ -162,7 +166,8 @@ function RetinaClass(options) {
           try {
             // console.log(filepathIn);
             var size = sizeOf(filepathIn);
-            results.sources.push({
+            results.sources[id] || (results.sources[id] = []);
+            results.sources[id].push({
               pathIn: filepathIn,
               // base: base,
               size: size,
@@ -184,9 +189,12 @@ function RetinaClass(options) {
           pathOut: filepathOut,
           base: set.base,
           dpi: dpi,
+          id: id,
         });
       }
     }
+
+    console.log(results);
 
     return results;
 
@@ -213,11 +221,12 @@ function RetinaClass(options) {
 
     var streams = [];
     targets.forEach(function(target) {
-      sources.sort(function(a, b) {
+      var id = target.id;
+      sources[id].sort(function(a, b) {
         return a.dpi - b.dpi;
       });
       var last;
-      sources.every(function(source) {
+      sources[id].every(function(source) {
         if (source.dpi > target.dpi) {
           streams.push(resize(source, target));
           return last = false;
@@ -236,6 +245,11 @@ function RetinaClass(options) {
   function resize(source, target) {
 
     // Generate resized stream from source file
+
+    // console.log(source);
+    // console.log('->');
+    // console.log(target);
+    // console.log('----------');
     
     var scale = target.dpi / source.dpi;
     var size;
