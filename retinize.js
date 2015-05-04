@@ -22,7 +22,7 @@ var options = {
   scanFolder: true,
 };
 
-module.exports = function(config) { 
+module.exports = function(config) {
 
   // Extend options
   extend(options, config);
@@ -100,6 +100,7 @@ function RetinaClass(options) {
     // Build arrays
 
     var images = buildAll(sets);
+    console.log(images);
 
     // Build streams
 
@@ -155,10 +156,6 @@ function RetinaClass(options) {
           options.flagOutPrefix
         );
 
-        // console.log(filepathIn);
-        // console.log(filepathOut);
-        // console.log('========');
-
 
         // Build source, target, and missing (not yet streamed) files
 
@@ -193,8 +190,6 @@ function RetinaClass(options) {
         });
       }
     }
-
-    console.log(results);
 
     return results;
 
@@ -245,11 +240,6 @@ function RetinaClass(options) {
   function resize(source, target) {
 
     // Generate resized stream from source file
-
-    // console.log(source);
-    // console.log('->');
-    // console.log(target);
-    // console.log('----------');
     
     var scale = target.dpi / source.dpi;
     var size;
@@ -291,7 +281,6 @@ function RetinaClass(options) {
     var partialPath = fPath.slice(base.length, -fName.length - ext.length);
 
     var extracted = parseName(fName, options.flagsPrefix);
-    console.log(extracted);
     if (!extracted) return false;
     var name = extracted.name;
     var fDpi = extracted.dpi;

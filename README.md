@@ -9,8 +9,13 @@ Accepts @4x and @2x resolutions, outputting to @4x, @2x, and @1x. Overrides may 
 
 ##Options
 
+##Errors
+
 ##Use With
+
+##Caveats
+* Each file in stream that does not map to a real file will be ignored. 
 
 ##License
 Provided under [The MIT License (MIT)](LICENSE)
-&copy; 2014 Matti Dupre 
+Copyright &copy; 2014 Matti Dupre 
