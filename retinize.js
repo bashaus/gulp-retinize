@@ -1,6 +1,6 @@
-var gm      = require('gm');
-var vinylSource  = require('vinyl-source-stream');
-var path    = require('path');
+var gm = require('gm');
+var vinylSource = require('vinyl-source-stream');
+var path = require('path');
 var sizeOf = require('image-size');
 var through = require('through2');
 var fs = require('fs');
@@ -17,7 +17,7 @@ var options = {
   flagsOutPrefix: false,
   extensions: ['jpg', 'jpeg', 'png'],
   roundUp: true,
-  remove: true, // Will remove files containing flags but not containing flagsOut
+  filter: true,
   scaleUp: false,
   scanFolder: true,
 };
@@ -77,7 +77,7 @@ function RetinaClass(options) {
 
       // Delete or rename file if required
 
-      if (typeof options.flagsOut[img.file.dpi] === 'undefined' && options.remove) {
+      if (typeof options.flagsOut[img.file.dpi] === 'undefined' && options.filter) {
         file = undefined;
       } else if (img.file.newPath) {
         file.path = img.file.newPath;
@@ -161,7 +161,6 @@ function RetinaClass(options) {
 
         if ( set.files[dpi] || options.scanFolder ) {
           try {
-            // console.log(filepathIn);
             var size = sizeOf(filepathIn);
             results.sources[id] || (results.sources[id] = []);
             results.sources[id].push({
