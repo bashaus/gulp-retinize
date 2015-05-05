@@ -29,12 +29,12 @@ gulp.task('images', images);
 
 function images(file) {
 
-  gutil.log(gutil.colors.green('Retinizing images...'));
+  console.log('Retinizing images...');
 
   return gulp.src(file && file.path || './img/**/*.{png,jpg,jpeg}')
     .pipe(retinize(retinizeOpts))
     .on('error', function(e) {
-      gutil.log(e.message);
+      console.log(e.message);
     })
     .pipe(gulp.dest('./public/img/'))
   ;
@@ -136,7 +136,7 @@ gulp.task('images', images);
 gulp.task('watch', function() {
 
   // Prevent gulp-watch from reading the file contents and follow the "change" event:
-  watch(['./img/**/*.{png,jpg,svg}'], { read: false, events: ['change'] }, images);
+  watch(['./img/**/*.{png,jpg,svg}'], { read: false }, images);
 
 });
 
@@ -164,7 +164,7 @@ gulp.task(images, images);
 gulp.task('watch', function() {
 
   // Prevent gulp-watch from reading the file contents and follow the "change" event:
-  watch(['./img/**/*.{png,jpg,svg}'], { read: false, events: ['change'] }, images);
+  watch(['./img/**/*.{png,jpg,svg}'], { read: false }, images);
 
   // Watch destination files and reload
   var server = livereload();
