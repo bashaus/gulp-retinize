@@ -13,9 +13,6 @@
   "scripts": {
     "test": "mocha  -R spec"
   },
-  "files": [
-    "index.js"
-  ],
   "keywords": [
     "retina",
     "retinize",
