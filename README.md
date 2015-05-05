@@ -118,7 +118,7 @@ Whether to, for each image, scan its containing folder for other source image si
 
 ## Use With
 
-### Gulp Watch _(NOT [gulp.watch](https://github.com/gulpjs/gulp/blob/master/docs/API.md#gulpwatchglob-opts-tasks)_
+### Gulp Watch _(NOT [gulp.watch](https://github.com/gulpjs/gulp/blob/master/docs/API.md#gulpwatchglob-opts-tasks))_
 
 Install [gulp-watch](https://github.com/floatdrop/gulp-watch): ```npm install --save-dev gulp-watch``` and implement as follows:
 
@@ -135,7 +135,7 @@ gulp.task('images', images);
 
 gulp.task('watch', function() {
 
-  // Prevent gulp-watch from reading the file contents and follow the "change" event:
+  // Prevent gulp-watch from reading the file contents
   watch(['./img/**/*.{png,jpg,svg}'], { read: false }, images);
 
 });
@@ -163,7 +163,7 @@ gulp.task(images, images);
 
 gulp.task('watch', function() {
 
-  // Prevent gulp-watch from reading the file contents and follow the "change" event:
+  // Prevent gulp-watch from reading the file contents
   watch(['./img/**/*.{png,jpg,svg}'], { read: false }, images);
 
   // Watch destination files and reload
