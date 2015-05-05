@@ -100,7 +100,6 @@ function RetinaClass(options) {
     // Build arrays
 
     var images = buildAll(sets);
-    console.log(images);
 
     // Build streams
 
