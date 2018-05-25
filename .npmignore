@@ -1,0 +1,5 @@
+.gitignore
+/spec/
+.editorconfig
+.eslintrc.json
+.travis.yml

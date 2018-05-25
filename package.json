@@ -2,7 +2,7 @@
   "name": "gulp-retinize",
   "version": "0.1.0",
   "description": "Automated retina down-scaling from @2x and @4x",
-  "main": "retinize.js",
+  "main": "src/index.js",
   "repository": {
     "type": "git",
     "url": "https://github.com/iveson/gulp-retinize"
@@ -11,7 +11,9 @@
     "node": ">=0.10.0"
   },
   "scripts": {
-    "test": "mocha  -R spec"
+    "lint": "node_modules/.bin/eslint src/**/*.js spec/**/*.spec.js",
+    "pretest": "npm run lint",
+    "test": "istanbul cover node_modules/jasmine/bin/jasmine.js"
   },
   "keywords": [
     "retina",
@@ -28,26 +30,19 @@
   },
   "homepage": "https://github.com/iveson/gulp-retinize",
   "dependencies": {
-    "extend": "^1.2.1",
-    "gm": "~1.14.2",
-    "image-size": "^0.2.5",
-    "path": "^0.4.9",
-    "through2": "^0.4.2",
-    "vinyl-source-stream": "^0.1.1"
+    "extend": "^3.0.1",
+    "glob": "^7.1.2",
+    "image-size": "^0.6.2",
+    "plugin-error": "^1.0.1",
+    "sharp": "^0.20.2",
+    "vinyl": "^2.1.0"
   },
   "devDependencies": {
-    "bluebird": "^1.2.4",
-    "chai": "^1.9.1",
-    "chai-as-promised": "^4.1.1",
-    "checksum": "^0.1.1",
-    "co-mocha": "0.0.4",
-    "extend": "^1.2.1",
-    "gulp": "^3.6.2",
-    "mocha": "*",
-    "rimraf": "^2.2.6",
-    "through2": "^0.4.2",
-    "thunkify": "^2.1.1",
-    "vinyl": "^0.2.3",
-    "vinyl-fs": "^0.2.1"
+    "eslint": "^4.19.1",
+    "expect": "^23.0.1",
+    "gulp": "^4.0.0",
+    "istanbul": "^0.4.5",
+    "jasmine": "^3.1.0",
+    "looks-same": "^3.3.0"
   }
 }
